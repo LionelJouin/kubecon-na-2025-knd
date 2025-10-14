@@ -1,0 +1,41 @@
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: dummy0
+spec:
+  spec:
+    devices:
+      requests:
+      - name: dummy0
+        exactly:
+          deviceClassName: dummy0
+          allocationMode: ExactCount
+          count: 1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo
+  labels:
+    app: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo
+  template:
+    metadata:
+      labels:
+        app: demo
+    spec:
+      containers:
+      - name: alpine
+        image: alpine:latest
+        imagePullPolicy: IfNotPresent
+        command:
+        - sleep
+        - infinity
+      resourceClaims:
+      - name: dummy0
+        resourceClaimTemplateName: dummy0

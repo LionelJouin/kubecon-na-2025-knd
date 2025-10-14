@@ -1,0 +1,95 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubecon-na-2025-knd-cluster-role
+rules:
+- apiGroups:
+  - ""
+  - resource.k8s.io
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubecon-na-2025-knd-service-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubecon-na-2025-knd-role-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubecon-na-2025-knd-cluster-role
+subjects:
+- kind: ServiceAccount
+  name: kubecon-na-2025-knd-service-account
+  namespace: default
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubecon-na-2025-knd
+  labels:
+    app: kubecon-na-2025-knd
+spec:
+  selector:
+    matchLabels:
+      app: kubecon-na-2025-knd
+  template:
+    metadata:
+      labels:
+        app: kubecon-na-2025-knd
+    spec:
+      tolerations:
+      - operator: Exists
+        effect: NoSchedule
+      - operator: Exists
+        effect: NoExecute
+      serviceAccountName: kubecon-na-2025-knd-service-account
+      hostNetwork: true
+      # hostPID: true
+      containers:
+      - name: kubecon-na-2025-knd
+        image: localhost:5000/kubecon-na-2025-knd/kubecon-na-2025-knd:latest
+        imagePullPolicy: Always
+        command:
+        - ./kubecon-na-2025-knd
+        args:
+        - "run"
+        - "--plugin-index=53"
+        - "--node-name=$(NODE_NAME)"
+        - "--verbosity=10"
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        # securityContext:
+        #   privileged: true
+        volumeMounts:
+        - name: cri-socket
+          mountPath: /var/run/nri/nri.sock
+        # - name: host-run-netns
+        #   mountPath: /run/netns
+        #   mountPropagation: HostToContainer
+        - name: kubelet-plugins-registry
+          mountPath: /var/lib/kubelet/plugins_registry
+        - name: kubelet-plugins
+          mountPath: /var/lib/kubelet/plugins
+      volumes:
+      - name: cri-socket
+        hostPath:
+          path: /var/run/nri/nri.sock
+          type: Socket
+      # - name: host-run-netns
+      #   hostPath:
+      #     path: /run/netns/
+      - name: kubelet-plugins-registry
+        hostPath:
+          path: /var/lib/kubelet/plugins_registry
+      - name: kubelet-plugins
+        hostPath:
+          path: /var/lib/kubelet/plugins
