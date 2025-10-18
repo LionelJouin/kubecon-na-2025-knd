@@ -9,7 +9,10 @@ import (
 
 // MemoryStore implements an in-memory store of ResourceClaims of pods.
 type MemoryStore struct {
-	mu           sync.RWMutex
+	mu sync.RWMutex
+	// podResources stores the ResourceClaims of pods.
+	// The key is the pod UID.
+	// The value is a slice of ResourceClaims associated with the pod.
 	podResources map[types.UID][]*resourcev1.ResourceClaim
 }
 

@@ -20,6 +20,7 @@ func main() {
 	pluginIndex := "25"
 	nodeName := os.Getenv("NODE_NAME")
 
+	// Create Kubernetes client.
 	clientCfg, err := rest.InClusterConfig()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to InClusterConfig: %v", err)
@@ -32,8 +33,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// 1. Create the in-memory store of ResourceClaims of pods.
 	memoryStore := driver.NewMemoryStore()
 
+	// 2. Start the DRA Kubelet plugin (DRA Driver).
 	draDriver, err := driver.Start(
 		ctx,
 		driverName,
@@ -47,17 +50,20 @@ func main() {
 	}
 	defer draDriver.Stop()
 
-	p := &driver.Plugin{
-		PodResourceStore: memoryStore,
-		DriverName:       driverName,
-	}
-
+	// 3. Start the resource discovery.
 	resourceDiscovery := &driver.Resources{
 		PublishResourcesFunc: draDriver.PublishResources,
 		Interval:             5 * time.Second,
 		NodeName:             nodeName,
 	}
 	go resourceDiscovery.Run(ctx)
+
+	// 4. Start the NRI plugin.
+	p := &driver.Plugin{
+		PodResourceStore: memoryStore,
+		DriverName:       driverName,
+		ClientSet:        clientset,
+	}
 
 	p.Stub, err = stub.New(p, []stub.Option{
 		stub.WithPluginName(pluginName),
@@ -73,4 +79,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "plugin exited with error: %v", err)
 		os.Exit(1)
 	}
+
 }

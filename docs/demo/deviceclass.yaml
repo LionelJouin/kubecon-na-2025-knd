@@ -2,10 +2,10 @@
 apiVersion: resource.k8s.io/v1
 kind: DeviceClass
 metadata:
-  name: dummy0
+  name: dummy
 spec:
   selectors:
   - cel:
       expression: device.driver == "kubecon-na-2025-knd.example.com"
   - cel:
-      expression: device.attributes["kubecon-na-2025-knd.example.com"].interfaceName == "dummy0"
+      expression: device.attributes["kubecon-na-2025-knd.example.com"].type == "dummy"

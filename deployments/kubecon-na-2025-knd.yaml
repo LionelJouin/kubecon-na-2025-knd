@@ -50,10 +50,9 @@ spec:
         effect: NoExecute
       serviceAccountName: kubecon-na-2025-knd-service-account
       hostNetwork: true
-      # hostPID: true
       containers:
       - name: kubecon-na-2025-knd
-        image: localhost:5000/kubecon-na-2025-knd/kubecon-na-2025-knd:latest
+        image: ghcr.io/lioneljouin/kubecon-na-2025-knd/kubecon-na-2025-knd:main
         imagePullPolicy: Always
         command:
         - ./kubecon-na-2025-knd
@@ -67,14 +66,14 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        # securityContext:
-        #   privileged: true
+        securityContext:
+          privileged: true
         volumeMounts:
         - name: cri-socket
           mountPath: /var/run/nri/nri.sock
-        # - name: host-run-netns
-        #   mountPath: /run/netns
-        #   mountPropagation: HostToContainer
+        - name: host-run-netns
+          mountPath: /run/netns
+          mountPropagation: HostToContainer
         - name: kubelet-plugins-registry
           mountPath: /var/lib/kubelet/plugins_registry
         - name: kubelet-plugins
@@ -84,9 +83,9 @@ spec:
         hostPath:
           path: /var/run/nri/nri.sock
           type: Socket
-      # - name: host-run-netns
-      #   hostPath:
-      #     path: /run/netns/
+      - name: host-run-netns
+        hostPath:
+          path: /run/netns/
       - name: kubelet-plugins-registry
         hostPath:
           path: /var/lib/kubelet/plugins_registry
