@@ -79,6 +79,10 @@ func (r *Resources) ListDevices() ([]resourcev1.Device, error) {
 		mtu := int64(link.Attrs().MTU)
 		linkType := link.Type()
 
+		if linkType != "dummy" {
+			continue
+		}
+
 		device := resourcev1.Device{
 			Name: link.Attrs().Name,
 			Attributes: map[resourcev1.QualifiedName]resourcev1.DeviceAttribute{

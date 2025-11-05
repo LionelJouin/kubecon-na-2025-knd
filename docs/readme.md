@@ -38,7 +38,16 @@ Create and configure the Kind Cluster
 kind create cluster --config docs/demo/kind.yaml
 # Add Dummy interfaces in the kind-worker
 docker exec -it kind-worker ip link add dummy0 type dummy
+docker exec -it kind-worker ip link set dev dummy0 mtu 9000
 docker exec -it kind-worker ip link set dummy0 up
+
+docker exec -it kind-worker ip link add dummy1 type dummy
+docker exec -it kind-worker ip link set dev dummy1 mtu 1500
+docker exec -it kind-worker ip link set dummy1 up
+
+docker exec -it kind-worker2 ip link add dummy1 type dummy
+docker exec -it kind-worker2 ip link set dev dummy1 mtu 1500
+docker exec -it kind-worker2 ip link set dummy1 up
 ```
 
 Deploy the driver

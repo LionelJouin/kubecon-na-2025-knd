@@ -109,8 +109,8 @@ func (d *Driver) PrepareResourceClaims(ctx context.Context, claims []*resourcev1
 }
 
 // HandleError handles errors from the DRA Kubelet plugin.
-func (d *Driver) HandleError(_ context.Context, _ error, _ string) {
-	// todo
+func (d *Driver) HandleError(ctx context.Context, err error, msg string) {
+	klog.FromContext(ctx).Error(err, "Driver.HandleError", "msg", msg)
 }
 
 // UnprepareResourceClaims unprepares the resource claims.

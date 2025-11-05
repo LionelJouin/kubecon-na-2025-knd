@@ -9,8 +9,9 @@ import (
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	resourcev1 "k8s.io/api/resource/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	resourceapply "k8s.io/client-go/applyconfigurations/resource/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 )
@@ -37,6 +38,9 @@ func (p *Plugin) CreateContainer(ctx context.Context, pod *api.PodSandbox, ctr *
 	adjust := &api.ContainerAdjustment{}
 
 	claims := p.PodResourceStore.Get(types.UID(pod.GetUid()))
+	if len(claims) == 0 {
+		return adjust, nil, nil
+	}
 
 	for _, claim := range claims {
 		for _, result := range claim.Status.Allocation.Devices.Results {
@@ -59,6 +63,9 @@ func (p *Plugin) CreateContainer(ctx context.Context, pod *api.PodSandbox, ctr *
 // of the devices allocated to the pod.
 func (p *Plugin) StartContainer(ctx context.Context, pod *api.PodSandbox, ctr *api.Container) error {
 	claims := p.PodResourceStore.Get(types.UID(pod.GetUid()))
+	if len(claims) == 0 {
+		return nil
+	}
 
 	podNetworkNamespace := getNetworkNamespace(pod)
 	if podNetworkNamespace == "" {
@@ -67,23 +74,22 @@ func (p *Plugin) StartContainer(ctx context.Context, pod *api.PodSandbox, ctr *a
 		return err
 	}
 
-	fmt.Println("Pod Network Namespace:", podNetworkNamespace)
-
 	for _, claim := range claims {
-		devices := []resourcev1.AllocatedDeviceStatus{}
+		statusUpdates := &resourceapply.ResourceClaimStatusApplyConfiguration{Devices: []resourceapply.AllocatedDeviceStatusApplyConfiguration{}}
 
-		// Keep devices allocated by other drivers.
-		for _, device := range claim.Status.Devices {
-			if device.Driver != p.DriverName {
-				devices = append(devices, device)
-			}
-		}
-
-		// Add devices allocated by this driver.
 		for _, result := range claim.Status.Allocation.Devices.Results {
-			// Only consider devices allocated by this driver.
 			if result.Driver != p.DriverName {
 				continue
+			}
+
+			resourceClaimStatusDevice := resourceapply.
+				AllocatedDeviceStatus().
+				WithDevice(result.Device).
+				WithDriver(result.Driver).
+				WithPool(result.Pool)
+
+			if result.ShareID != nil {
+				resourceClaimStatusDevice.WithShareID(string(*result.ShareID))
 			}
 
 			networkData, err := getNetworkData(result.Device, podNetworkNamespace)
@@ -93,31 +99,25 @@ func (p *Plugin) StartContainer(ctx context.Context, pod *api.PodSandbox, ctr *a
 				return err
 			}
 
-			devices = append(devices, resourcev1.AllocatedDeviceStatus{
-				Driver:  result.Driver,
-				Pool:    result.Pool,
-				Device:  result.Device,
-				ShareID: (*string)(result.ShareID),
-				Conditions: []v1.Condition{
-					{
-						Type:               "NetworkReady",
-						Status:             v1.ConditionTrue,
-						LastTransitionTime: v1.Now(),
-						Reason:             "NetworkReady",
-						Message:            "Device successfully allocated and assigned to the pod",
-					},
-				},
-				NetworkData: networkData,
-			})
+			if networkData != nil {
+				networkDataApply := resourceapply.NetworkDeviceData().
+					WithHardwareAddress(networkData.HardwareAddress).
+					WithIPs(networkData.IPs...).
+					WithInterfaceName(networkData.InterfaceName)
+
+				resourceClaimStatusDevice.WithNetworkData(networkDataApply)
+			}
+
+			statusUpdates.WithDevices(resourceClaimStatusDevice)
 		}
 
-		// Update the ResourceClaim status with the new devices.
-		claim.Status.Devices = devices
-		_, err := p.ClientSet.ResourceV1().ResourceClaims(claim.GetNamespace()).UpdateStatus(ctx, claim, v1.UpdateOptions{})
+		resourceClaimApply := resourceapply.ResourceClaim(claim.GetName(), claim.GetNamespace()).WithStatus(statusUpdates)
+		_, err := p.ClientSet.ResourceV1().ResourceClaims(claim.GetNamespace()).ApplyStatus(ctx,
+			resourceClaimApply,
+			metav1.ApplyOptions{FieldManager: p.DriverName, Force: true},
+		)
 		if err != nil {
-			err = fmt.Errorf("failed to update resource claim status: %v", err)
-			klog.FromContext(ctx).Info(err.Error())
-			return err
+			return fmt.Errorf("failed to update resource claim status: %v", err)
 		}
 	}
 
